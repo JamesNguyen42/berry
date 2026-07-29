@@ -341,6 +341,29 @@ describe(`Scripts tests`, () => {
       );
 
       test(
+        `it should ignore dependency binaries that point to directories`,
+        makeTemporaryEnv(
+          {
+            dependencies: {
+              [`has-symlinks`]: `1.0.0`,
+              [`invalid-bin-entry`]: `1.0.0`,
+            },
+            scripts: {
+              [`test`]: `has-symlinks && echo ok`,
+            },
+          },
+          config,
+          async ({run}) => {
+            await run(`install`);
+
+            await expect(run(`test`)).resolves.toMatchObject({
+              stdout: `ok\n`,
+            });
+          },
+        ),
+      );
+
+      test(
         `it should run install scripts during the install`,
         makeTemporaryEnv({dependencies: {[`no-deps-scripted`]: `1.0.0`}}, {
           enableScripts: true,

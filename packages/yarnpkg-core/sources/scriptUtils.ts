@@ -703,18 +703,30 @@ export async function getPackageAccessibleBinaries(locator: Locator, {project}: 
     return {dependency, packageLocation};
   }));
 
-  // The order in which binaries overwrite each other must be stable
-  for (const candidate of dependenciesWithBinaries) {
-    if (candidate === miscUtils.mapAndFilter.skip)
-      continue;
+  await ZipOpenFS.openPromise(async zipOpenFs => {
+    // The order in which binaries overwrite each other must be stable
+    for (const candidate of dependenciesWithBinaries) {
+      if (candidate === miscUtils.mapAndFilter.skip)
+        continue;
 
-    const {dependency, packageLocation} = candidate;
+      const {dependency, packageLocation} = candidate;
 
-    for (const [name, target] of dependency.bin) {
-      const binaryPath = ppath.resolve(packageLocation, target);
-      binaries.set(name, [dependency, npath.fromPortablePath(binaryPath), isNodeScript(binaryPath)]);
+      for (const [name, target] of dependency.bin) {
+        const binaryPath = ppath.resolve(packageLocation, target);
+
+        // Some registries expand `directories.bin` into entries that point to directories.
+        let binaryStat;
+        try {
+          binaryStat = await zipOpenFs.statPromise(binaryPath);
+        } catch {}
+
+        if (binaryStat?.isDirectory())
+          continue;
+
+        binaries.set(name, [dependency, npath.fromPortablePath(binaryPath), isNodeScript(binaryPath)]);
+      }
     }
-  }
+  });
 
   return binaries;
 }

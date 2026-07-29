@@ -1,0 +1,10 @@
+{
+  "name": "invalid-bin-entry",
+  "version": "1.0.0",
+  "bin": {
+    "generated": "./generated"
+  },
+  "directories": {
+    "bin": "./generated"
+  }
+}

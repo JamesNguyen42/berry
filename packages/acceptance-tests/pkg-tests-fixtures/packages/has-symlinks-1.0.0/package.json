@@ -1,4 +1,7 @@
 {
   "name": "has-symlinks",
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "bin": {
+    "has-symlinks": "./symlink.js"
+  }
 }
