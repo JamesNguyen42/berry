@@ -1,5 +1,7 @@
-import {npath}     from '@yarnpkg/fslib';
-import * as vscode from 'vscode';
+import {npath}                         from '@yarnpkg/fslib';
+import * as vscode                     from 'vscode';
+
+import {ZIP_ARCHIVE_EXTENSION_PATTERN} from './archiveExtensions';
 
 type Link = vscode.TerminalLink & {data: string};
 
@@ -21,7 +23,9 @@ const SELECTOR_PATTERNS = [
 ];
 
 const COMBINED_SELECTORS = SELECTOR_PATTERNS.map(selector => `(${selector.source})`).join(`|`);
-const FILEPATH_MATCHER = /(([A-Za-z]:)?\/.*((__virtual__)|(\$\$virtual)|(\.zip)).*\.[\w:]+)/.source;
+const FILEPATH_MATCHER = new RegExp(
+  String.raw`(([A-Za-z]:)?\/.*((__virtual__)|(\$\$virtual)|(${ZIP_ARCHIVE_EXTENSION_PATTERN})).*\.[\w:]+)`,
+).source;
 
 const FILE_SELECTOR_MATCHER = `(${FILEPATH_MATCHER})(${COMBINED_SELECTORS})?`;
 
