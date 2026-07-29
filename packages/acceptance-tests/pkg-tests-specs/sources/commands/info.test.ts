@@ -237,5 +237,33 @@ describe(`Commands`, () => {
         });
       }),
     );
+
+    test(
+      `it should show virtualized dependency resolutions`,
+      makeTemporaryEnv({
+        dependencies: {
+          [`peer-deps-lvl0`]: `1.0.0`,
+        },
+      }, async ({path, run, source}) => {
+        await run(`install`);
+
+        const {stdout} = await run(`info`, `peer-deps-lvl1`, `--recursive`, `--virtuals`, `--json`);
+        const data = stdout.match(/.*\n/g)!.map(line => JSON.parse(line));
+
+        const basePackage = data.find(entry => entry.value === `peer-deps-lvl1@npm:1.0.0`);
+
+        expect(basePackage).toMatchObject({
+          children: {
+            Dependencies: expect.arrayContaining([
+              {
+                descriptor: expect.stringMatching(/^peer-deps-lvl2@virtual:/),
+                locator: expect.stringMatching(/^peer-deps-lvl2@virtual:/),
+              },
+            ]),
+          },
+        });
+        expect(basePackage.children.Dependencies).toHaveLength(1);
+      }),
+    );
   });
 });
