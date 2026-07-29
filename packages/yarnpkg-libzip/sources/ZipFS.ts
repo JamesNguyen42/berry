@@ -1302,8 +1302,16 @@ export class ZipFS extends BasePortableFakeFS {
   private readFileBuffer(p: FSPath<PortablePath>, opts: {asyncDecompress: true}): Promise<Buffer>;
   private readFileBuffer(p: FSPath<PortablePath>, opts: {asyncDecompress: boolean}): Promise<Buffer> | Buffer;
   private readFileBuffer(p: FSPath<PortablePath>, opts: {asyncDecompress: boolean} = {asyncDecompress: false}): Buffer | Promise<Buffer> {
-    if (typeof p === `number`)
-      p = this.fdToPath(p, `read`);
+    const fdEntry = typeof p === `number`
+      ? this.fds.get(p)
+      : undefined;
+
+    if (typeof p === `number`) {
+      if (typeof fdEntry === `undefined`)
+        throw errors.EBADF(`read`);
+
+      p = fdEntry.p;
+    }
 
     const resolvedP = this.resolveFilename(`open '${p}'`, p);
     if (!this.entries.has(resolvedP) && !this.listings.has(resolvedP))
@@ -1320,7 +1328,18 @@ export class ZipFS extends BasePortableFakeFS {
     if (entry === undefined)
       throw new Error(`Unreachable`);
 
-    return this.getFileSource(entry, opts);
+    if (typeof fdEntry === `undefined`)
+      return this.getFileSource(entry, opts);
+
+    const readFromCurrentPosition = (source: Buffer) => {
+      const data = source.subarray(fdEntry.cursor);
+      fdEntry.cursor += data.length;
+      return data;
+    };
+
+    return opts.asyncDecompress
+      ? Promise.resolve(this.getFileSource(entry, {asyncDecompress: true})).then(readFromCurrentPosition)
+      : readFromCurrentPosition(this.getFileSource(entry, {asyncDecompress: false}));
   }
 
   async readdirPromise(p: PortablePath, opts?: null): Promise<Array<Filename>>;

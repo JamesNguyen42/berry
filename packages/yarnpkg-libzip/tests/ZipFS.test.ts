@@ -353,10 +353,10 @@ describe(`ZipFS`, () => {
     zipFs.writeFileSync(fd, `1234567890`);
 
     zipFs.ftruncateSync(fd, 5);
-    expect(zipFs.readFileSync(fd, `utf8`)).toStrictEqual(`12345`);
+    expect(zipFs.readFileSync(`/foo.txt` as PortablePath, `utf8`)).toStrictEqual(`12345`);
 
     await zipFs.ftruncatePromise(fd, 4);
-    expect(zipFs.readFileSync(fd, `utf8`)).toStrictEqual(`1234`);
+    expect(zipFs.readFileSync(`/foo.txt` as PortablePath, `utf8`)).toStrictEqual(`1234`);
 
     zipFs.closeSync(fd);
     zipFs.discardAndClose();
@@ -845,12 +845,55 @@ describe(`ZipFS`, () => {
     zipFs.writeFileSync(fd, `new content`);
 
     await expect(zipFs.readFilePromise(fd, `utf8`)).resolves.toEqual(`new content`);
+    zipFs.closeSync(fd);
 
-    await zipFs.writeFilePromise(fd, `new new content`);
+    const nextFd = zipFs.openSync(`/dir/file` as PortablePath, `r`);
+    await zipFs.writeFilePromise(nextFd, `new new content`);
 
-    expect(zipFs.readFileSync(fd, `utf8`)).toEqual(`new new content`);
+    expect(zipFs.readFileSync(nextFd, `utf8`)).toEqual(`new new content`);
+    zipFs.closeSync(nextFd);
 
     zipFs.discardAndClose();
+  });
+
+  it(`should read from the current fd position in readFileSync`, () => {
+    const zipFs = new ZipFS(null, {level: 9});
+
+    zipFs.writeFileSync(`/file` as PortablePath, `file content`);
+    const archive = zipFs.getBufferAndClose();
+
+    const reopenedZipFs = new ZipFS(archive);
+
+    const fd = reopenedZipFs.openSync(`/file` as PortablePath, `r`);
+    const prefix = Buffer.alloc(5);
+
+    expect(reopenedZipFs.readSync(fd, prefix)).toEqual(5);
+    expect(prefix.toString()).toEqual(`file `);
+    expect(reopenedZipFs.readFileSync(fd, `utf8`)).toEqual(`content`);
+    expect(reopenedZipFs.readFileSync(fd)).toEqual(Buffer.alloc(0));
+
+    reopenedZipFs.closeSync(fd);
+    reopenedZipFs.discardAndClose();
+  });
+
+  it(`should read from the current fd position in readFilePromise`, async () => {
+    const zipFs = new ZipFS(null, {level: 9});
+
+    await zipFs.writeFilePromise(`/file` as PortablePath, `file content`);
+    const archive = zipFs.getBufferAndClose();
+
+    const reopenedZipFs = new ZipFS(archive);
+
+    const fd = await reopenedZipFs.openPromise(`/file` as PortablePath, `r`);
+    const prefix = Buffer.alloc(5);
+
+    await expect(reopenedZipFs.readPromise(fd, prefix)).resolves.toEqual(5);
+    expect(prefix.toString()).toEqual(`file `);
+    await expect(reopenedZipFs.readFilePromise(fd, `utf8`)).resolves.toEqual(`content`);
+    await expect(reopenedZipFs.readFilePromise(fd)).resolves.toEqual(Buffer.alloc(0));
+
+    await reopenedZipFs.closePromise(fd);
+    reopenedZipFs.discardAndClose();
   });
 
   it(`should throw ENOTDIR when trying to stat a file as a directory`, () => {
