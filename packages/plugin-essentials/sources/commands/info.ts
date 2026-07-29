@@ -180,9 +180,13 @@ export default class InfoCommand extends BaseCommand {
         };
       });
 
-      const sortedLookup = miscUtils.sortMap([...lookupSet], pkg => {
-        return structUtils.stringifyLocator(pkg);
-      });
+      const sortedLookup = miscUtils.sortMap([...lookupSet], [
+        pkg => structUtils.stringifyLocator(structUtils.isVirtualLocator(pkg)
+          ? structUtils.devirtualizeLocator(pkg)
+          : pkg),
+        pkg => structUtils.isVirtualLocator(pkg) ? `1` : `0`,
+        pkg => structUtils.stringifyLocator(pkg),
+      ]);
 
       const selection = sortedLookup.filter(pkg => {
         return matchers.length === 0 || matchers.some(matcher => matcher(pkg));
@@ -225,6 +229,8 @@ export default class InfoCommand extends BaseCommand {
 
     const infoTreeChildren: treeUtils.TreeMap = {};
     const infoTree: treeUtils.TreeNode = {children: infoTreeChildren};
+    const registerPackageData = new Map<LocatorHash, (namespace: string, info: Array<formatUtils.Tuple> | {[key: string]: formatUtils.Tuple | undefined}) => void>();
+    const basePackageDependencies = new Map<LocatorHash, Package[`dependencies`]>();
 
     const fetcher = configuration.makeFetcher();
     const fetcherOptions: FetchOptions = {project, fetcher, cache, checksums: project.storedChecksums, report: new ThrowReport(), cacheOptions: {skipIntegrityCheck: true}};
@@ -331,6 +337,11 @@ export default class InfoCommand extends BaseCommand {
       };
 
       if (!isVirtual) {
+        registerPackageData.set(pkg.locatorHash, registerData);
+        basePackageDependencies.set(pkg.locatorHash, pkg.dependencies);
+      }
+
+      if (!isVirtual) {
         for (const infoBuilder of builtinInfoBuilders)
           await infoBuilder(pkg, extraSet, registerData);
 
@@ -352,8 +363,16 @@ export default class InfoCommand extends BaseCommand {
         }));
       }
 
-      if (pkg.dependencies.size > 0 && !isVirtual) {
-        registerData(`Dependencies`, [...pkg.dependencies.values()].map(dependency => {
+      if (pkg.dependencies.size > 0) {
+        const base = isVirtual
+          ? structUtils.devirtualizeLocator(pkg)
+          : pkg;
+        const registerBasePackageData = registerPackageData.get(base.locatorHash);
+        const dependencies = [...(basePackageDependencies.get(base.locatorHash)?.values() ?? [])].map(dependency => {
+          return pkg.dependencies.get(dependency.identHash) ?? dependency;
+        });
+
+        registerBasePackageData?.(`Dependencies`, dependencies.map(dependency => {
           const resolutionHash = project.storedResolutions.get(dependency.descriptorHash);
 
           const resolution = typeof resolutionHash !== `undefined`
